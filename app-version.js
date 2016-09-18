@@ -1,6 +1,6 @@
 var AWS = require('aws-sdk');
 var async = require('async');
-var wget = require('wget');
+var http = require('http');
 AWS.config.region = 'eu-west-1';
 
 exports.version = function(event, context, callback){
@@ -10,7 +10,6 @@ exports.version = function(event, context, callback){
     var autoScaling = new AWS.AutoScaling();
 
     async.waterfall([
-
         getAutoScalingGroups,
         getInstances,
         describeInstances,
@@ -64,17 +63,26 @@ function getInstanceVersion(data) {
     console.log("getInstanceVersion");
 
     for (var i = 0; i < data.Reservations.length; i++) {
+
         var ipAddress = data.Reservations[i].Instances[0].PrivateIpAddress;
 
         var options = {
-            protocol: 'http',
-            host: ipAddress,
-            path: '/version',
-            method: 'GET'
+          host: ipAddress,
+          port: 80,
+          path: '/version',
+          method: 'GET'
         };
-        
-        wget.request(options, function(res) {
-            console.log(res);
-        });
+
+        var instanceId = data.Reservations[i].Instances[0].InstanceId;
+        var name = data.Reservations[i].Instances[0].Tags.filter( function(item){return item.Key=='Name';})[0].Value;
+
+        (function(instanceId, name){
+            http.request(options, function(res) {
+                res.on('data', function (chunk) {
+                    console.log(instanceId + " : " + name + ' : ' + chunk);
+                });
+            })
+            .end();
+        })(instanceId, name);
     }
 }
